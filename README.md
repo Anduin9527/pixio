@@ -27,7 +27,7 @@ conda activate pixio
 pip install -r requirements.txt
 ```
 
-## Inference
+## Inference (may need Huggingface login)
 
 You can either use *source code* from this repo or call *Transformers APIs*.
 
@@ -106,7 +106,7 @@ img = transform(img)
 features = model(img.unsqueeze(0))
 ```
 
-### Transformers
+### Transformers (may need Huggingface login)
 
 You can find all HuggingFace paths under this [collection](https://huggingface.co/collections/facebook/pixio).
 
