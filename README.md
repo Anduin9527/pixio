@@ -7,7 +7,7 @@ Official implementation of **Pixio** from the paper [In Pursuit of Pixel Supervi
 
 [Lihe Yang](https://liheyoung.github.io), [Shang-Wen Li](https://swdanielli.github.io), [Yang Li](https://openreview.net/profile?id=~Yang_Li112), [Xinjie Lei](https://scholar.google.com/citations?user=nIQqtuAAAAAJ), [Dong Wang](https://scholar.google.com/citations?user=ioHfZecAAAAJ), [Abdelrahman Mohamed](https://www.cs.toronto.edu/~asamir), [Hengshuang Zhao](https://hszhao.github.io), [Hu Xu](https://howardhsu.github.io)
 
-[[`arXiv`](https://arxiv.org/abs/2512.15715)] [[`HuggingFace`](https://huggingface.co/collections/facebook/pixio)] [[`BibTeX`](#citation)]
+[[`BibTeX`](#citation)]
 
 Pixio is largely built on [MAE](https://github.com/facebookresearch/mae), with three minimal yet critical algorithm updates:
 - deeper decoder
