@@ -1,5 +1,8 @@
 # Pixio
 
+[![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv&logoColor=b31b1b)](https://arxiv.org/abs/2512.15715)
+[![Hugging Model Card](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-blue)](https://huggingface.co/collections/facebook/pixio)
+
 Official implementation of **Pixio** from the paper [In Pursuit of Pixel Supervision for Visual Pre-training](https://arxiv.org/abs/2512.15715).
 
 [Lihe Yang](https://liheyoung.github.io), [Shang-Wen Li](https://swdanielli.github.io), [Yang Li](https://openreview.net/profile?id=~Yang_Li112), [Xinjie Lei](https://scholar.google.com/citations?user=nIQqtuAAAAAJ), [Dong Wang](https://scholar.google.com/citations?user=ioHfZecAAAAJ), [Abdelrahman Mohamed](https://www.cs.toronto.edu/~asamir), [Hengshuang Zhao](https://hszhao.github.io), [Hu Xu](https://howardhsu.github.io)
