@@ -1,4 +1,10 @@
-# Pixio
+<h1 align="center">
+Pixio
+</h1>
+
+<h3 align="center">
+a vision SSL representation dedicated to dense CV tasks 
+</h3>
 
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b?logo=arxiv&logoColor=b31b1b)](https://arxiv.org/abs/2512.15715)
 [![Hugging Model Card](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-blue)](https://huggingface.co/collections/facebook/pixio)
