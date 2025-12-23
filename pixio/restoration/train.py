@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+
 import sys
 
 sys.path.append(os.path.abspath("pretraining"))
@@ -197,7 +198,6 @@ def main():
     else:
         criterion = nn.MSELoss()
 
-    start_iter = 0
     epoch = 0
 
     logger.info(f"Start training for {total_iter} iterations")
@@ -322,9 +322,29 @@ def main():
                             .to(device)
                         )
 
+                        from .utils.inference import sliding_window_inference
+
+                        # Get inference options (default to SwinIR-like tiling disabled, but shift ensemble enabled)
+                        val_opt = opt["validation"]
+                        inference_opt = val_opt.get("inference", {})
+                        tile_size = inference_opt.get("tile_size", None)
+                        tile_overlap = inference_opt.get("tile_overlap", 32)
+                        use_shift_ensemble = inference_opt.get(
+                            "use_shift_ensemble", True
+                        )
+
                         # Inference
+                        # Clamp handled inside sliding_window_inference? No, logic in inference.py doesn't clamp.
+                        # We should clamp here.
                         with torch.no_grad():
-                            sr_tensor = model(blur_tensor)
+                            sr_tensor = sliding_window_inference(
+                                model,
+                                blur_tensor,
+                                tile_size=tile_size,
+                                tile_overlap=tile_overlap,
+                                use_shift_ensemble=use_shift_ensemble,
+                            )
+                            sr_tensor = sr_tensor.clamp(0, 1)
 
                         # Metrics using pyiqa
                         try:

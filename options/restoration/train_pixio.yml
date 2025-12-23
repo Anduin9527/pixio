@@ -61,6 +61,12 @@ validation:
   val_freq: 5000 # 验证频率
   visual_freq: 1000 # 可视化频率
   save_img: true # 是否保存验证集的可视化结果
+  
+  # 推断配置 (SwinIR-style Tiling + Shift Ensemble)
+  inference:
+    tile_size: 512 # 瓦片大小 (None 表示测试全图)
+    tile_overlap: 32 # 瓦片重叠大小
+    use_shift_ensemble: true # 是否开启 Shift Ensemble (4次平移平均) 以消除 ViT 网格伪影
 
 logger:
   print_freq: 100 # 打印训练日志的频率 (Iterations)
