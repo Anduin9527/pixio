@@ -1,6 +1,6 @@
 import argparse
 import os
-import time
+
 import math
 import torch
 import torch.nn as nn
@@ -11,7 +11,7 @@ import sys
 sys.path.append(os.path.abspath("pretraining"))
 
 import swanlab
-import yaml
+
 
 from pretraining import models_pixio
 from .dataset import PairedImageDataset
@@ -22,7 +22,7 @@ from .dataset_utils import tensor2img
 import cv2
 import numpy as np
 import pyiqa
-from torchvision.transforms.functional import to_tensor
+
 from loguru import logger
 from tqdm import tqdm
 
@@ -246,127 +246,120 @@ def main():
                 logger.info(f"Saved checkpoint to {save_path}")
 
             # Validation and Visualization
-            if val_dataloader:
-                is_val_step = (current_iter + 1) % opt["validation"]["val_freq"] == 0
-                visual_freq = opt["validation"].get(
-                    "visual_freq", opt["validation"]["val_freq"]
-                )
-                is_visual_step = (
-                    opt["validation"].get("save_img", False)
-                    and (current_iter + 1) % visual_freq == 0
-                )
 
-                if is_val_step or is_visual_step:
-                    model.eval()
+            # Determine frequencies
+            val_freq = opt["validation"].get("val_freq", 5000)
+            visual_freq = opt["validation"].get("visual_freq", val_freq)
 
-                    # Full Validation
-                    if is_val_step:
-                        logger.info(f"Validating at iteration {current_iter + 1}...")
-                        val_psnr = 0.0
-                        val_ssim = 0.0
+            # Check if steps align
+            is_val_step = (current_iter + 1) % val_freq == 0
+            is_visual_step = (
+                opt["validation"].get("save_img", False)
+                and (current_iter + 1) % visual_freq == 0
+            )
+
+            if is_val_step or is_visual_step:
+                model.eval()
+
+                # 1. Full Validation (Requires val_dataloader)
+                if val_dataloader and is_val_step:
+                    logger.info(f"Validating at iteration {current_iter + 1}...")
+                    val_psnr = 0.0
+                    val_ssim = 0.0
+                    with torch.no_grad():
+                        for val_data in tqdm(
+                            val_dataloader,
+                            desc=f"Validating Iter {current_iter + 1}",
+                        ):
+                            val_lq = val_data["lq"].to(device)
+                            val_gt = val_data["gt"].to(device)
+
+                            val_output = model(val_lq)
+
+                            # Calculate metrics
+                            sr_img = tensor2img(val_output)
+                            gt_img = tensor2img(val_gt)
+
+                            val_psnr += calculate_psnr(sr_img, gt_img, crop_border=0)
+                            val_ssim += calculate_ssim(sr_img, gt_img, crop_border=0)
+
+                    avg_psnr = val_psnr / len(val_dataloader)
+                    avg_ssim = val_ssim / len(val_dataloader)
+
+                    logger.info(
+                        f"Validation PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.4f}"
+                    )
+                    if use_swanlab:
+                        swanlab.log(
+                            {"val/psnr": avg_psnr, "val/ssim": avg_ssim},
+                            step=current_iter,
+                        )
+
+                # 2. Single Image Validation (Independent of val_dataloader)
+                if is_visual_step:
+                    blur_path = "assets/blur.png"
+                    sharp_path = "assets/sharp.png"
+                    if os.path.exists(blur_path) and os.path.exists(sharp_path):
+                        # Read images
+                        blur_img = cv2.imread(blur_path).astype(np.float32) / 255.0
+                        sharp_img = cv2.imread(sharp_path).astype(np.float32) / 255.0
+
+                        # BGR to RGB
+                        blur_img = cv2.cvtColor(blur_img, cv2.COLOR_BGR2RGB)
+                        sharp_img = cv2.cvtColor(sharp_img, cv2.COLOR_BGR2RGB)
+
+                        # To Tensor [1, C, H, W]
+                        blur_tensor = (
+                            torch.from_numpy(blur_img.transpose(2, 0, 1))
+                            .float()
+                            .unsqueeze(0)
+                            .to(device)
+                        )
+                        sharp_tensor = (
+                            torch.from_numpy(sharp_img.transpose(2, 0, 1))
+                            .float()
+                            .unsqueeze(0)
+                            .to(device)
+                        )
+
+                        # Inference
                         with torch.no_grad():
-                            for val_data in tqdm(
-                                val_dataloader,
-                                desc=f"Validating Iter {current_iter + 1}",
-                            ):
-                                val_lq = val_data["lq"].to(device)
-                                val_gt = val_data["gt"].to(device)
+                            sr_tensor = model(blur_tensor)
 
-                                val_output = model(val_lq)
-
-                                # Calculate metrics
-                                sr_img = tensor2img(val_output)
-                                gt_img = tensor2img(val_gt)
-
-                                val_psnr += calculate_psnr(
-                                    sr_img, gt_img, crop_border=0
-                                )
-                                val_ssim += calculate_ssim(
-                                    sr_img, gt_img, crop_border=0
-                                )
-
-                        avg_psnr = val_psnr / len(val_dataloader)
-                        avg_ssim = val_ssim / len(val_dataloader)
+                        # Metrics using pyiqa
+                        try:
+                            psnr_func = pyiqa.create_metric("psnr", device=device)
+                            ssim_func = pyiqa.create_metric("ssim", device=device)
+                            single_psnr = psnr_func(sr_tensor, sharp_tensor).item()
+                            single_ssim = ssim_func(sr_tensor, sharp_tensor).item()
+                        except Exception as e:
+                            print(f"Error calculating pyiqa metrics: {e}")
+                            single_psnr = 0.0
+                            single_ssim = 0.0
 
                         logger.info(
-                            f"Validation PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.4f}"
+                            f"Single Image - PSNR: {single_psnr:.4f}, SSIM: {single_ssim:.4f}"
                         )
+
                         if use_swanlab:
+                            # Convert tensors to numpy for logging (RGB)
+                            sr_np = tensor2img(sr_tensor, rgb2bgr=False)
+
                             swanlab.log(
-                                {"val/psnr": avg_psnr, "val/ssim": avg_ssim},
+                                {
+                                    "single_val/psnr": single_psnr,
+                                    "single_val/ssim": single_ssim,
+                                    "single_val/visual": [
+                                        swanlab.Image(sr_np, caption="Restored")
+                                    ],
+                                },
                                 step=current_iter,
                             )
-
-                    # Single Image Validation
-                    if is_visual_step:
-                        blur_path = "assets/blur.png"
-                        sharp_path = "assets/sharp.png"
-                        if os.path.exists(blur_path) and os.path.exists(sharp_path):
-                            # Read images
-                            blur_img = cv2.imread(blur_path).astype(np.float32) / 255.0
-                            sharp_img = (
-                                cv2.imread(sharp_path).astype(np.float32) / 255.0
-                            )
-
-                            # BGR to RGB
-                            blur_img = cv2.cvtColor(blur_img, cv2.COLOR_BGR2RGB)
-                            sharp_img = cv2.cvtColor(sharp_img, cv2.COLOR_BGR2RGB)
-
-                            # To Tensor [1, C, H, W]
-                            blur_tensor = (
-                                torch.from_numpy(blur_img.transpose(2, 0, 1))
-                                .float()
-                                .unsqueeze(0)
-                                .to(device)
-                            )
-                            sharp_tensor = (
-                                torch.from_numpy(sharp_img.transpose(2, 0, 1))
-                                .float()
-                                .unsqueeze(0)
-                                .to(device)
-                            )
-
-                            # Inference
-                            with torch.no_grad():
-                                sr_tensor = model(blur_tensor)
-
-                            # Metrics using pyiqa
-                            try:
-                                psnr_func = pyiqa.create_metric("psnr", device=device)
-                                ssim_func = pyiqa.create_metric("ssim", device=device)
-                                single_psnr = psnr_func(sr_tensor, sharp_tensor).item()
-                                single_ssim = ssim_func(sr_tensor, sharp_tensor).item()
-                            except Exception as e:
-                                print(f"Error calculating pyiqa metrics: {e}")
-                                single_psnr = 0.0
-                                single_ssim = 0.0
-
-                            logger.info(
-                                f"Single Image - PSNR: {single_psnr:.4f}, SSIM: {single_ssim:.4f}"
-                            )
-
-                            if use_swanlab:
-                                # Convert tensors to numpy for logging (RGB)
-                                blur_np = tensor2img(blur_tensor, rgb2bgr=False)
-                                sharp_np = tensor2img(sharp_tensor, rgb2bgr=False)
-                                sr_np = tensor2img(sr_tensor, rgb2bgr=False)
-
-                                swanlab.log(
-                                    {
-                                        "single_val/psnr": single_psnr,
-                                        "single_val/ssim": single_ssim,
-                                        "single_val/visual": [
-                                            swanlab.Image(sr_np, caption="Restored")
-                                        ],
-                                    },
-                                    step=current_iter,
-                                )
-                        else:
-                            logger.warning(
-                                "Warning: assets/blur.png or assets/sharp.png not found, skipping single image validation."
-                            )
-
-                    model.train()  # Switch back to train mode
+                    else:
+                        logger.warning(
+                            "Warning: assets/blur.png or assets/sharp.png not found, skipping single image validation."
+                        )
+                model.train()  # Switch back to train mode
 
             current_iter += 1
         epoch += 1
