@@ -2,22 +2,7 @@
 import argparse
 import os
 import time
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-import sys
-sys.path.append(os.path.abspath('pretraining'))
-
-import swanlab
-
-from pretraining import models_pixio
-from .dataset import PairedImageDataset
-from .model_wrapper import PixIORestoration
-
-import argparse
-import os
-import time
+import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -54,14 +39,25 @@ def main():
     print(dict2str(opt))
     
     # Initialize SwanLab
+    # Initialize SwanLab
     logger_opt = opt['logger']
-    swanlab_opt = logger_opt.get('swanlab', {})
-    swanlab.init(
-        project=swanlab_opt.get('project', 'pixio-restoration'),
-        experiment_name=swanlab_opt.get('experiment_name', opt['name']),
-        config=opt,
-        logdir=opt['path']['experiments_root']
-    )
+    swanlab_opt = logger_opt.get('swanlab', {})  # Assuming user might pass None in YAML as ~
+    
+    use_swanlab = False
+    # Check if swanlab_opt is not None and not empty (simplistic check, depends on how YAML parses `~`)
+    # If in YAML: swanlab: ~, then swanlab_opt is None.
+    # If in YAML: swanlab: {}, then it's empty dict.
+    if swanlab_opt is not None and isinstance(swanlab_opt, dict) and swanlab_opt.get('project') is not None:
+        use_swanlab = True
+        swanlab.init(
+            project=swanlab_opt.get('project', 'pixio-restoration'),
+            experiment_name=swanlab_opt.get('experiment_name', opt['name']),
+            config=opt,
+            logdir=opt['path']['experiments_root']
+        )
+        print("SwanLab initialized.")
+    else:
+        print("SwanLab logging disabled (configuration missing or empty).")
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     os.makedirs(opt['path']['experiments_root'], exist_ok=True)
@@ -95,7 +91,11 @@ def main():
     base_model = models_pixio.__dict__[net_opt['type']]()
     if net_opt.get('pretrained_path'):
         checkpoint = torch.load(net_opt['pretrained_path'], map_location='cpu')
-        base_model.load_state_dict(checkpoint['model'], strict=False)
+        if 'model' in checkpoint:
+            state_dict = checkpoint['model']
+        else:
+            state_dict = checkpoint
+        base_model.load_state_dict(state_dict, strict=False)
         print(f"Loaded pretrained weights from {net_opt['pretrained_path']}")
         print(f"Loaded pretrained weights from {net_opt['pretrained_path']}")
         
@@ -111,16 +111,10 @@ def main():
     ).to(device)
     print(f"Model initialized with mask_ratio: {mask_ratio}")
     
-    model = PixIORestoration(
-        base_model, 
-        mask_ratio=mask_ratio,
-        strategy=strategy,
-        lora_opt=lora_opt
-    ).to(device)
-    print(f"Model initialized with mask_ratio: {mask_ratio}")
-    
     # Optimization
     train_opt = opt['train']
+    total_iter = train_opt['total_iter']
+
     optim_params = []
     for k, v in model.named_parameters():
         if v.requires_grad:
@@ -177,7 +171,6 @@ def main():
     else:
         criterion = nn.MSELoss()
     
-    total_iter = train_opt['total_iter']
     start_iter = 0
     epoch = 0
     
@@ -203,7 +196,8 @@ def main():
             
             if current_iter % logger_opt['print_freq'] == 0:
                 print(f"Iter [{current_iter}/{total_iter}] Loss: {loss.item():.4f}")
-                swanlab.log({"train/loss": loss.item()}, step=current_iter)
+                if use_swanlab:
+                    swanlab.log({"train/loss": loss.item()}, step=current_iter)
             
             if (current_iter + 1) % logger_opt['save_checkpoint_freq'] == 0:
                 save_path = os.path.join(opt['path']['experiments_root'], f'checkpoint_{current_iter+1}.pth')
@@ -239,7 +233,8 @@ def main():
                 avg_ssim = val_ssim / len(val_dataloader)
                 
                 print(f"Validation PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.4f}")
-                swanlab.log({"val/psnr": avg_psnr, "val/ssim": avg_ssim}, step=current_iter)
+                if use_swanlab:
+                    swanlab.log({"val/psnr": avg_psnr, "val/ssim": avg_ssim}, step=current_iter)
                 model.train() # Switch back to train mode
 
             current_iter += 1

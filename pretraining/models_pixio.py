@@ -13,6 +13,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.init import trunc_normal_
 
 from layers.attention import SelfAttentionBlock
@@ -200,7 +201,16 @@ class PixioViT(nn.Module):
         x = self.patch_embed(x)
         
         # add pos embed w/o cls token
-        x = x + self.pos_embed[:, self.n_cls_tokens:, :]
+        pos_embed = self.pos_embed[:, self.n_cls_tokens:, :]
+        # 如果位置编码不是 256*256 的话，进行插值
+        if x.shape[1] != pos_embed.shape[1]:
+            num_patches_orig = pos_embed.shape[1]
+            h_orig = w_orig = int(num_patches_orig ** 0.5)
+            pos_embed = pos_embed.reshape(1, h_orig, w_orig, -1).permute(0, 3, 1, 2)
+            pos_embed = F.interpolate(pos_embed, size=(H, W), mode='bicubic', align_corners=False)
+            pos_embed = pos_embed.permute(0, 2, 3, 1).flatten(1, 2)
+        
+        x = x + pos_embed
         
         cls_token = self.cls_token + self.pos_embed[:, :self.n_cls_tokens, :]
         cls_tokens = cls_token.expand(x.shape[0], -1, -1)
@@ -240,7 +250,25 @@ class PixioViT(nn.Module):
         x = torch.cat((x[:, :self.n_cls_tokens, :], x_), dim=1)  # append cls token
         
         # add pos embed
-        x = x + self.decoder_pos_embed
+        decoder_pos_embed = self.decoder_pos_embed
+        # 如果位置编码不是 256*256 的话，进行插值
+        if x.shape[1] != decoder_pos_embed.shape[1]:
+            cls_pos_embed = decoder_pos_embed[:, :self.n_cls_tokens, :]
+            patch_pos_embed = decoder_pos_embed[:, self.n_cls_tokens:, :]
+            
+            num_patches_orig = patch_pos_embed.shape[1]
+            h_orig = w_orig = int(num_patches_orig ** 0.5)
+            
+            num_patches_new = x.shape[1] - self.n_cls_tokens
+            h_new = w_new = int(num_patches_new ** 0.5)
+            
+            patch_pos_embed = patch_pos_embed.reshape(1, h_orig, w_orig, -1).permute(0, 3, 1, 2)
+            patch_pos_embed = F.interpolate(patch_pos_embed, size=(h_new, w_new), mode='bicubic', align_corners=False)
+            patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).flatten(1, 2)
+            
+            decoder_pos_embed = torch.cat((cls_pos_embed, patch_pos_embed), dim=1)
+            
+        x = x + decoder_pos_embed
         
         # apply Transformer blocks
         for blk in self.decoder_blocks:
@@ -299,9 +327,10 @@ def pixio_vit1b16_enc1536x48h24_dec512x32h16(**kwargs):
     return model
 
 
-def pixio_vit5b16_enc3072x48h32_dec512x32h16(**kwargs):
+
+def pixio_vitb16_enc768x12h12_dec512x32h16(**kwargs):
     model = PixioViT(
-        patch_size=16, embed_dim=3072, depth=48, num_heads=32,
+        patch_size=16, embed_dim=768, depth=12, num_heads=12,
         decoder_embed_dim=512, decoder_depth=32, decoder_num_heads=16,
         mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
