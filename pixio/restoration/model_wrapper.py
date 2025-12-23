@@ -223,5 +223,5 @@ class PixIORestoration(nn.Module):
 
         x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
         x = torch.einsum("nhwpqc->nchpwq", x)
-        imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
+        imgs = x.reshape(shape=(x.shape[0], 3, h * p, w * p))
         return imgs
