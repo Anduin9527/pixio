@@ -1,4 +1,4 @@
-name: PixIO_Restoration # 实验/项目名称，用于日志记录
+name: PixIO_Restoration_lora # 实验/项目名称，用于日志记录
 model_type: PixIORestoration # 模型类型，标识这是一个图像恢复模型
 num_gpu: 1 # 使用的 GPU 数量（当前代码暂未完全支持多 GPU 分布式，仅作占位）
 manual_seed: 42 # 随机种子，保证结果可复现
@@ -28,7 +28,7 @@ network_g:
   mask_ratio: 0.0 # 掩码率 (0.0 表示保留全部 Patch，适合全图恢复任务；预训练时通常为 0.75)
   
   # 训练策略配置
-  training_strategy: full # 可选: 'full' (全量微调), 'freeze_encoder' (冻结 Encoder 仅微调 Decoder), 'lora' (使用 LoRA)
+  training_strategy: lora # 可选: 'full' (全量微调), 'freeze_encoder' (冻结 Encoder 仅微调 Decoder), 'lora' (使用 LoRA)
   
   # LoRA 配置 (仅当 training_strategy: lora 时生效)
   lora:
@@ -67,7 +67,7 @@ logger:
   save_checkpoint_freq: 5000 # 保存模型权重的频率 (Iterations)
   swanlab:
     project: Pixio # SwanLab 项目名称
-    experiment_name: Pixio_full_256_1U # SwanLab 实验名称
+    experiment_name: Pixio_lora_256_1U # SwanLab 实验名称
 
 path:
-  experiments_root: ./experiments/restoration # 实验结果（日志、模型）保存的根目录
+  experiments_root: ./experiments/restoration_lora # 实验结果（日志、模型）保存的根目录
