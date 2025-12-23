@@ -47,7 +47,7 @@ class="center">
 
 **Feed-forward 3D reconstruction ([MapAnything](https://github.com/facebookresearch/map-anything), ScanNet++ v2)**
 
-| Method    | ViT   | #Params | Scale (rel $\downarrow$) | Points (rel $\downarrow$) | Points ($\tau \uparrow$) | Pose (auc@5 $\uparrow$) | Depth (rel $\downarrow$) | Depth ($\tau \uparrow$) |
+| Method    | ViT   | #Params | Scale (rel $\downarrow$) | Points (rel $\downarrow$) | Points ($\tau \uparrow$) | Pose (auc5 $\uparrow$) | Depth (rel $\downarrow$) | Depth ($\tau \uparrow$) |
 | :-------- | ----: | ------: | :----------------------: | :-----------------------: | :----------------------: | :--------------------: | :-----------------------: | :-------------------------: |
 | MAE       | H/14  | 631M    | 0.050                    | 0.057                     | 63.3                     | 65.6                   | 0.058                     | 55.4                        | 
 | DINOv2    | L/14  | 304M    | 0.041                    | 0.052                     | 67.6                     | 73.2                   | 0.052                     | 60.6                        |
