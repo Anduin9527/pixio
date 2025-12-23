@@ -12,3 +12,6 @@ swanlab
 lmdb
 pyyaml
 opencv-python
+pyiqa
+loguru
+tqdm

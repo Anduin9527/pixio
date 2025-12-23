@@ -58,8 +58,9 @@ train:
     loss_weight: 1.0 # 损失权重
 
 validation:
-  val_freq: 5000 # 验证频率（多少次迭代验证一次），当前训练脚本未实装验证循环
-  save_img: false # 是否保存验证集的可视化结果
+  val_freq: 5000 # 验证频率
+  visual_freq: 1000 # 可视化频率
+  save_img: true # 是否保存验证集的可视化结果
 
 logger:
   print_freq: 100 # 打印训练日志的频率 (Iterations)
