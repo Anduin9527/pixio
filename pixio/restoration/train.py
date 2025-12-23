@@ -8,6 +8,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import sys
+import time
+import datetime
 
 sys.path.append(os.path.abspath("pretraining"))
 
@@ -202,6 +204,7 @@ def main():
 
     logger.info(f"Start training for {total_iter} iterations")
 
+    start_time = time.time()
     current_iter = 0
     while current_iter < total_iter:
         model.train()
@@ -223,8 +226,13 @@ def main():
                 scheduler.step()
 
             if current_iter % logger_opt["print_freq"] == 0:
+                elapsed_time = time.time() - start_time
+                avg_time_per_iter = elapsed_time / (current_iter + 1)
+                remaining_time = (total_iter - current_iter - 1) * avg_time_per_iter
+                eta_str = str(datetime.timedelta(seconds=int(remaining_time)))
+
                 logger.info(
-                    f"Iter [{current_iter}/{total_iter}] Loss: {loss.item():.4f}"
+                    f"Iter [{current_iter}/{total_iter}] Loss: {loss.item():.4f} | ETA: {eta_str}"
                 )
                 if use_swanlab:
                     swanlab.log({"train/loss": loss.item()}, step=current_iter)
@@ -253,9 +261,8 @@ def main():
 
             # Check if steps align
             is_val_step = (current_iter + 1) % val_freq == 0
-            is_visual_step = (
-                opt["validation"].get("save_img", False)
-                and (current_iter + 1) % visual_freq == 0
+            is_visual_step = opt["validation"].get("save_img", False) and (
+                (current_iter + 1) % visual_freq == 0 or current_iter == 0
             )
 
             if is_val_step or is_visual_step:
