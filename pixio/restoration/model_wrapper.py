@@ -183,7 +183,14 @@ class PixIORestoration(nn.Module):
         latent, mask, ids_restore = self.encoder.forward_encoder(
             x, mask_ratio=mask_ratio
         )
-        pred = self.encoder.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+        pred = self.encoder.forward_decoder(
+            latent,
+            ids_restore,
+            shape=(
+                x.shape[2] // self.encoder.patch_embed.patch_size[0],
+                x.shape[3] // self.encoder.patch_embed.patch_size[1],
+            ),
+        )  # [N, L, p*p*3]
 
         # Pred is [N, L, p*p*3], we need to unpatchify it to [N, 3, H, W]
         # PixioViT model in `models_pixio.py` has `unpatchify` method?
