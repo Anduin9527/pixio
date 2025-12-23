@@ -168,6 +168,34 @@ class PixioViT(nn.Module):
 
         x = x.view(N, H, W, D)
 
+        if mask_ratio == 0:
+            # If no masking is needed, simply return original x
+            # and a "keep-all" mask / restore indices.
+            # Mask definition: 0 is keep, 1 is remove?
+            # In forward_loss: loss = (loss * mask).sum() / mask.sum().
+            # If mask is used for loss calculation (MAE style), usually 1 is masked (target).
+            # But wait, here we are in restoration (inference). The mask returned here
+            # is primarily for restoration ids.
+            # Let's check mask usage:
+            # In forward_loss: mask 0 is keep? No, conventionally MAE computes loss on masked patches (1).
+            # But here `mask[:, : len_keep] = 0` means kept patches are 0.
+            # So if mask_ratio=0, we keep everything, so mask should be all 0s?
+            # Or wait, if mask_ratio=0, we compute loss on everything?
+            # PixIO might be different.
+            # But CRITICALLY: ids_restore is used by decoder to scatter tokens back.
+            # So valid ids_restore must be range(L).
+
+            mask = torch.zeros([N, H * W], device=x.device)  # All 0 means all kept?
+            ids_restore = torch.argsort(
+                torch.arange(H * W, device=x.device).unsqueeze(0).repeat(N, 1), dim=1
+            )
+            # Simplest ids_restore is just range if no shuffle.
+            ids_restore = torch.arange(H * W, device=x.device).unsqueeze(0).repeat(N, 1)
+
+            # x is already (N, H, W, D), flatten it back
+            x = x.view(N, -1, D)
+            return x, mask, ids_restore
+
         num_patches = (H // grid) * (W // grid)
         len_keep = int(num_patches * (1 - mask_ratio))
 
