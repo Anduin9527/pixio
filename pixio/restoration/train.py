@@ -118,15 +118,27 @@ def main():
     # Model
     net_opt = opt["network_g"]
     logger.info(f"Creating model: {net_opt['type']}")
-    base_model = models_pixio.__dict__[net_opt["type"]]()
-    if net_opt.get("pretrained_path"):
-        checkpoint = torch.load(net_opt["pretrained_path"], map_location="cpu")
-        if "model" in checkpoint:
-            state_dict = checkpoint["model"]
-        else:
-            state_dict = checkpoint
-        base_model.load_state_dict(state_dict, strict=False)
-        logger.info(f"Loaded pretrained weights from {net_opt['pretrained_path']}")
+
+    if net_opt["type"] == "PixIO_SSM":
+        from .archs.pixio_ssm import PixIO_SSM
+
+        base_model = PixIO_SSM(
+            pretrained_path=net_opt.get("pretrained_path"),
+            decoder_dim=net_opt.get("decoder_dim", 384),
+        )
+        logger.info(
+            f"Initialized PixIO_SSM with decoder_dim={net_opt.get('decoder_dim', 384)}"
+        )
+    else:
+        base_model = models_pixio.__dict__[net_opt["type"]]()
+        if net_opt.get("pretrained_path"):
+            checkpoint = torch.load(net_opt["pretrained_path"], map_location="cpu")
+            if "model" in checkpoint:
+                state_dict = checkpoint["model"]
+            else:
+                state_dict = checkpoint
+            base_model.load_state_dict(state_dict, strict=False)
+            logger.info(f"Loaded pretrained weights from {net_opt['pretrained_path']}")
 
     mask_ratio = net_opt.get("mask_ratio", 0.0)
     strategy = net_opt.get("training_strategy", "full")
@@ -222,6 +234,14 @@ def main():
             return (tensor - mean) / std
         return tensor
 
+    # AMP Scaler
+    use_amp = opt["train"].get("use_amp", False)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    if use_amp:
+        logger.info("AMP enabled.")
+    else:
+        logger.info("AMP disabled.")
+
     epoch = 0
 
     logger.info(f"Start training for {total_iter} iterations")
@@ -238,12 +258,18 @@ def main():
             gt = batch["gt"].to(device)
 
             optimizer.zero_grad()
-            output = model(lq)
-            loss = criterion(output, gt) * train_opt["pixel_opt"].get(
-                "loss_weight", 1.0
-            )
-            loss.backward()
-            optimizer.step()
+
+            # Use AMP
+            with torch.amp.autocast("cuda", enabled=use_amp):
+                output = model(lq)
+                loss = criterion(output, gt) * train_opt["pixel_opt"].get(
+                    "loss_weight", 1.0
+                )
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
             if scheduler is not None:
                 scheduler.step()
 

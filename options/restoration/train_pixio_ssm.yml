@@ -1,0 +1,91 @@
+name: PixIO_SSM_Restoration # 实验/项目名称，用于日志记录
+model_type: PixIORestoration # Keep this as wrapper mainly handles model.forward() logic?
+# Wait, wrapper `PixIORestoration` expects `base_model` to have `forward_encoder` etc if it does LoRA.
+# But `PixIO_SSM` is a standalone nn.Module that does forward().
+# If I wrap `PixIO_SSM` in `PixIORestoration`, does it work?
+# `PixIORestoration` forward calls `self.model(x)`. If `strategy=full`.
+# `PixIO_SSM` forward is `forward(x)`.
+# So it is compatible.
+
+num_gpu: 1
+manual_seed: 42
+
+datasets:
+  train:
+    name: gopro-train
+    type: PairedImageDataset
+    dataroot_gt: /home/share/deblur/GoPro_datasets/GoPro/train/sharp_crops.lmdb
+    dataroot_lq: /home/share/deblur/GoPro_datasets/GoPro/train/blur_crops.lmdb
+    io_backend:
+      type: lmdb
+    
+    gt_size: 256
+    use_flip: true
+    use_rot: true
+
+    use_shuffle: true
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 32 # SSM might be heavier/lighter? 32 is safe.
+    dataset_enlarge_ratio: 1
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+  val:
+    name: gopro-test
+    type: PairedImageDataset
+    dataroot_gt: /home/share/deblur/GoPro_datasets/GoPro/test/target.lmdb
+    dataroot_lq: /home/share/deblur/GoPro_datasets/GoPro/test/input.lmdb
+    io_backend:
+      type: lmdb
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+network_g:
+  type: PixIO_SSM
+  pretrained_path: /home/leris/.cache/huggingface/hub/models--facebook--pixio-vitb16/snapshots/dd8987ed2d276f81eceb58c797fb851ab83dd557/pixio_vitb16.pth
+  decoder_dim: 384
+  
+  # 训练策略配置
+  training_strategy: full 
+  # mask_ratio is irrlevant for PixIO_SSM as it handles it internally (0.0).
+
+train:
+  optim_g:
+    type: AdamW
+    lr: !!float 1e-4
+    weight_decay: 0.05
+    betas: [0.9, 0.95]
+  
+  use_amp: true
+
+  scheduler:
+    type: CosineAnnealingLR
+    T_max: 100000
+    eta_min: !!float 1e-7
+
+  total_iter: 100000
+  warmup_iter: 5000
+
+  pixel_opt:
+    type: L1Loss # L1 is robust.
+    loss_weight: 1.0
+
+validation:
+  val_freq: 5000
+  visual_freq: 1000
+  save_img: true
+  
+  inference:
+    tile_size: 512
+    tile_overlap: 32
+    use_shift_ensemble: true
+
+logger:
+  print_freq: 100
+  save_checkpoint_freq: 5000
+  swanlab:
+    project: Pixio
+    experiment_name: Pixio_SSM_256_amp_1U
+
+path:
+  experiments_root: ./experiments/restoration_ssm

@@ -1,4 +1,4 @@
-name: PixIO_Restoration_lora # 实验/项目名称，用于日志记录
+name: PixIO_Restoration_lora_amp # 实验/项目名称，用于日志记录
 model_type: PixIORestoration # 模型类型，标识这是一个图像恢复模型
 num_gpu: 1 # 使用的 GPU 数量（当前代码暂未完全支持多 GPU 分布式，仅作占位）
 manual_seed: 42 # 随机种子，保证结果可复现
@@ -19,7 +19,7 @@ datasets:
     # data loader 配置
     use_shuffle: true # 是否打乱数据
     num_worker_per_gpu: 4 # 每个 GPU 分配的数据加载线程数
-    batch_size_per_gpu: 32 # 每个 GPU 的 Batch Size
+    batch_size_per_gpu: 64 # 每个 GPU 的 Batch Size
     dataset_enlarge_ratio: 1 # 数据集放大倍率（用于增加每个 epoch 的迭代次数，当前代码可能未实装）
     mean: [0.485, 0.456, 0.406]
     std: [0.229, 0.224, 0.225]
@@ -62,6 +62,7 @@ train:
 
   total_iter: 100000 # 总训练迭代次数 (Iterations)
   warmup_iter: 5000 # 预热迭代次数，在此期间学习率线性增加
+  use_amp: true # 是否开启混合精度训练 (AMP)
 
   # 损失函数配置
   pixel_opt:
@@ -78,7 +79,7 @@ logger:
   save_checkpoint_freq: 20000 # 保存模型权重的频率 (Iterations)
   swanlab:
     project: Pixio # SwanLab 项目名称
-    experiment_name: Pixio_lora_256_1U # SwanLab 实验名称
+    experiment_name: Pixio_lora_256_amp_1U # SwanLab 实验名称
 
 path:
   experiments_root: ./experiments/restoration_lora # 实验结果（日志、模型）保存的根目录
