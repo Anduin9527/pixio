@@ -21,6 +21,18 @@ datasets:
     num_worker_per_gpu: 4 # 每个 GPU 分配的数据加载线程数
     batch_size_per_gpu: 32 # 每个 GPU 的 Batch Size
     dataset_enlarge_ratio: 1 # 数据集放大倍率（用于增加每个 epoch 的迭代次数，当前代码可能未实装）
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+  val:
+    name: gopro-test
+    type: PairedImageDataset
+    dataroot_gt: /home/share/deblur/GoPro_datasets/GoPro/test/sharp_crops.lmdb
+    dataroot_lq: /home/share/deblur/GoPro_datasets/GoPro/test/blur_crops.lmdb
+    io_backend:
+      type: lmdb
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
 
 network_g:
   type: pixio_vitb16_enc768x12h12_dec512x32h16 # 生成器网络架构类型: ViT-B (Base)

@@ -200,6 +200,28 @@ def main():
     else:
         criterion = nn.MSELoss()
 
+    # Get mean/std for normalization (if configured)
+    mean = opt["datasets"]["train"].get("mean")
+    std = opt["datasets"]["train"].get("std")
+    if mean is not None and std is not None:
+        mean_tensor = torch.tensor(mean).view(1, 3, 1, 1).to(device)
+        std_tensor = torch.tensor(std).view(1, 3, 1, 1).to(device)
+    else:
+        mean_tensor = None
+        std_tensor = None
+
+    # Helper function for denormalization
+    def denormalize(tensor, mean, std):
+        if mean is not None and std is not None:
+            return tensor * std + mean
+        return tensor
+
+    # Helper function for normalization
+    def normalize_img(tensor, mean, std):
+        if mean is not None and std is not None:
+            return (tensor - mean) / std
+        return tensor
+
     epoch = 0
 
     logger.info(f"Start training for {total_iter} iterations")
@@ -283,9 +305,18 @@ def main():
 
                             val_output = model(val_lq)
 
+                            # Denormalize output and GT before tensor2img (metrics)
+                            # tensor2img expects [0-1] so we clamp after denorm
+                            sr_denorm = denormalize(
+                                val_output, mean_tensor, std_tensor
+                            ).clamp(0, 1)
+                            gt_denorm = denormalize(
+                                val_gt, mean_tensor, std_tensor
+                            ).clamp(0, 1)
+
                             # Calculate metrics
-                            sr_img = tensor2img(val_output)
-                            gt_img = tensor2img(val_gt)
+                            sr_img = tensor2img(sr_denorm)
+                            gt_img = tensor2img(gt_denorm)
 
                             val_psnr += calculate_psnr(sr_img, gt_img, crop_border=0)
                             val_ssim += calculate_ssim(sr_img, gt_img, crop_border=0)
@@ -329,6 +360,9 @@ def main():
                             .to(device)
                         )
 
+                        # Normalize Input if needed
+                        blur_input = normalize_img(blur_tensor, mean_tensor, std_tensor)
+
                         from .utils.inference import sliding_window_inference
 
                         # Get inference options (default to SwinIR-like tiling disabled, but shift ensemble enabled)
@@ -346,11 +380,13 @@ def main():
                         with torch.no_grad():
                             sr_tensor = sliding_window_inference(
                                 model,
-                                blur_tensor,
+                                blur_input,
                                 tile_size=tile_size,
                                 tile_overlap=tile_overlap,
                                 use_shift_ensemble=use_shift_ensemble,
                             )
+                            # Denormalize Output
+                            sr_tensor = denormalize(sr_tensor, mean_tensor, std_tensor)
                             sr_tensor = sr_tensor.clamp(0, 1)
 
                         # Metrics using pyiqa
